@@ -126,10 +126,14 @@ jobs: # Defines the overall Jobs for this particular pipeline to be used in work
   Deploy Docker Image:
     docker: *image
     steps:
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run: *env
+      - checkout
       - run:
           name: Deploy to internal registry
           command: |
-            mvn docker:push
+            mvn install -B -DskipTests $DISABLE_DOWNLOAD_PROGRESS_OPTS docker:push
   Deploy Artifacts: # Deploy artifacts to Nexus or Maven Central
     docker:
       - image: circleci/ruby:2.4.1
@@ -187,8 +191,9 @@ workflows:
               only: master
       - Deploy Docker Image: # Job 6b
           requires:
-            - Contract Testing
-            - Integration Testing
-          filters:
-            branches:
-              only: master
+            - Container Scan
+#            - Contract Testing
+#            - Integration Testing
+#          filters:
+#            branches:
+#              only: master
