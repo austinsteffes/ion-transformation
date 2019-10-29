@@ -13,13 +13,18 @@
  */
 package com.connexta.transformation.service;
 
+import com.connexta.transformation.commons.api.exceptions.TransformationException;
+import com.connexta.transformation.commons.api.status.Transformation;
+import com.connexta.transformation.commons.inmemory.InMemoryTransformationManager;
 import com.connexta.transformation.rest.models.TransformRequest;
-import com.connexta.transformation.rest.springboot.TransformApi;
+import com.connexta.transformation.rest.spring.TransformApiTransform;
 import com.google.common.base.Preconditions;
+import java.net.URI;
+import java.net.URISyntaxException;
 import javax.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -28,36 +33,32 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
- * Implementation of the Transformation RESTful service. This is the main entry point for all HTTP
- * requests.
+ * Implementation of the Transformation RESTful POST/TRANSFORM service
  */
 @RestController
 @CrossOrigin(origins = "*")
-public class TransformController implements TransformApi {
+public class TransformController implements TransformApiTransform {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TransformController.class);
 
   private static final String ACCEPT_VERSION = "Accept-Version";
 
-  private final RestTemplate restTemplate;
+  private final InMemoryTransformationManager transformationManager;
 
-  private final String lookupServiceUrl;
-
-  public TransformController(
-      RestTemplate restTemplate, @Qualifier("lookupServiceUrl") String lookupServiceUrl) {
-    Preconditions.checkNotNull(restTemplate, "Rest Template cannot be null.");
-    Preconditions.checkNotNull(lookupServiceUrl, "Lookup Service Url cannot be null.");
-    this.restTemplate = restTemplate;
-    this.lookupServiceUrl = lookupServiceUrl;
+  @Autowired
+  public TransformController(InMemoryTransformationManager transformationManager) {
+    Preconditions.checkNotNull(transformationManager, "TransformationManager cannot be null");
+    this.transformationManager = transformationManager;
   }
 
   /**
    * Handles application/json POST transform requests to the /transform context. This method
    * handles: - Validating the message - Forwarding the request to the service lookup service.
-   * Returns an HTTP Status Code of 202 Accepted on success; otherwise, an error status code.
+   * Returns an HTTP Status Code of 201 Created on success and a location URI; otherwise, an error
+   * status code.
    */
   @RequestMapping(
       value = "/transform",
@@ -65,17 +66,27 @@ public class TransformController implements TransformApi {
       method = RequestMethod.POST)
   public ResponseEntity<Void> transform(
       @RequestHeader(ACCEPT_VERSION) String acceptVersion,
-      @Valid @RequestBody TransformRequest transformRequest) {
+      @Valid @RequestBody TransformRequest transformRequest)
+      throws URISyntaxException, TransformationException {
+
     LOGGER.debug("{}: {}", ACCEPT_VERSION, acceptVersion);
-    forwardRequest(transformRequest);
-    return ResponseEntity.accepted().build();
+    return postURI(transformRequest);
   }
 
-  private void forwardRequest(TransformRequest transformRequest) {
-    LOGGER.debug("Forwarding request to: {}", lookupServiceUrl);
-    ResponseEntity<String> response =
-        restTemplate.postForEntity(lookupServiceUrl, transformRequest, String.class);
-    LOGGER.debug(
-        "HTTP response status code from lookup service: {}", response.getStatusCodeValue());
+  private ResponseEntity<Void> postURI(TransformRequest transformRequest)
+      throws TransformationException, URISyntaxException {
+
+    ResponseEntity<Void> response;
+    Transformation trans =
+        transformationManager.createTransform(
+            transformRequest.getCurrentLocation(),
+            transformRequest.getFinalLocation(),
+            transformRequest.getMetacardLocation());
+
+    URI s = ServletUriComponentsBuilder.fromCurrentRequest().build().toUri();
+    URI uri = new URI(String.format("%s/%s", s.toString(), trans.getTransformId()));
+    response = ResponseEntity.created(uri).build();
+
+    return response;
   }
 }

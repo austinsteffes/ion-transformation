@@ -73,6 +73,16 @@
             <artifactId>guava</artifactId>
             <version>28.0-jre</version>
         </dependency>
+        <dependency>
+            <groupId>com.connexta.transformation</groupId>
+            <artifactId>commons-api</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.connexta.transformation</groupId>
+            <artifactId>commons-impl</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
     <build>
